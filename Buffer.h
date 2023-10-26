@@ -36,6 +36,7 @@ public:
 			// full
 			return false;
 		}
+		// moved
 		__datas[head % n] = std::move(val);
 		// update head
 		__head.store(head + 1, std::memory_order_release);
