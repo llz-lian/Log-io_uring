@@ -108,16 +108,16 @@ namespace Logger
 		inline int fd = 0;
 		inline int num = 0;
 
-		inline size_t write_cnt = 0;
 		inline std::string file_name;
 		inline struct ::stat file_stat;
 
 		size_t buffered_size = 0;
-		size_t max_buffered_size = 3950;
-		std::string self_buffer;
+		const size_t max_buffered_size = 3950;
+		// std::string self_buffer;
+		std::vector<std::string> self_buffer;
 
 		size_t fsync_cnt = 0;
-		size_t fsync_times = 10;
+		const size_t fsync_times = 10;
 		void checkFileName()
 		{
 			// check if can write
@@ -144,15 +144,19 @@ namespace Logger
 		void writeAll(bool sync)
 		{
 			// write data
-			::write(fd,self_buffer.data(),self_buffer.size());
+			for(auto & data:self_buffer)
+			{
+				::write(fd,data.data(),data.size());
+			}
+			// ::write(fd,self_buffer.data(),self_buffer.size());
+			self_buffer.clear();
 			if(sync) ::fsync(fd);
 			checkFileName();
-			self_buffer.clear();
 			return;
 		}
 		void write(const Msg & msg)
 		{
-			if(self_buffer.size()>= self_buffer)
+			if(buffered_size>= self_buffer)
 			{
 				if(fsync_cnt>=fsync_times)
 				{
@@ -162,11 +166,14 @@ namespace Logger
 				else
 					writeAll(false);
 				fsync_cnt++;
+				buffered_size = 0;
 				return;
 			}
 			// buffer data
-			self_buffer += std::move(msg);// copy but cotinuous, memory need it?
-			self_buffer.push_back('\n');
+			buffered_size += msg.size() + 1;
+			// self_buffer += msg;// copy but continuous, memory need it?
+			self_buffer.push_back(std::move(msg));// not continuous， but no copy
+			self_buffer.back().push_back('\n');
 		}
 		void initFileName()
 		{
@@ -174,7 +181,7 @@ namespace Logger
 			auto& config = Config::get();
 			file_name = std::format("{}/{}_{}_{}",config.log_path,config.log_name, std::this_thread::get_id(), num);
 			checkFileName();
-			self_buffer.reserve(4096);
+			self_buffer.reserve(100);
 		}
 	}
 };
@@ -183,10 +190,13 @@ namespace Logger
 {
 	namespace // worker
 	{
+		const size_t wait_ms = 100;
+		size_t passed_time = 0;
+		const size_t passed_sync_time = 10;
 		inline void work()
 		{
 			// fetch data
-			auto data = Config::get().buffer.pop();
+			auto data = Config::get().buffer.pop();// throw when empty
 			// check output
 			auto output = Config::get().output;
 			if(!(output & LOG_OUTPUT::None))
@@ -207,28 +217,42 @@ namespace Logger
 		{
 			sem.release();
 		}
-		inline void stunWorker()
+		inline bool stunWorker()
 		{
-			sem.acquire();
+			// wait 50ms
+			return sem.try_acquire_for(std::chrono::milliseconds(wait_ms));// or 50ms
 		}
 		inline void initWorker() noexcept
 		{
 			std::jthread worker{[&]() {
+				bool has_data = false;
 				while (true)
 				{
 					// fetch data
 					try
 					{
-						while (true)
-							work();
+						if(has_data)
+						{
+							while (true) work();
+						}
+						else
+						{
+							passed_time++;
+							if(passed_time >= passed_sync_time)
+							{
+								passed_time = 0;
+								::fsync(fd);
+							}
+						}
 					}
-					catch (const std::exception&) // no data sleep
+					catch (const std::exception&) 
 					{
-						stunWorker();
+						has_data = stunWorker();// no data sleep xx ms
 					}
 				}
 			}
 			};
+			// worker.detach(); jthread
 		}
 	}
 };
@@ -258,6 +282,7 @@ namespace Logger
 	namespace
 	{
 		using handle = std::function<void(const Mst & msg)>;
+		// call DEBUG(msg) ==> log(handles[LOG_LEVEL::DEBUG](msg))
 		std::vector<handle> handles(5);// continous
 		void initHandles(LOG_LEVEL level)
 		{
@@ -265,6 +290,7 @@ namespace Logger
 			{
 				handles[i] = empty;
 			}
+			// use level build handles
 			switch (level)
 			{
 				// add handle
@@ -276,33 +302,38 @@ namespace Logger
 		}
 		inline void log(const Msg& msg)
 		{
+			if(msg.empty()) return;
 			// push to buffer
-			auto& config = Config::get();
-			auto& buffer = config.buffer;
-			while(!buffer.push(msg)) handle[size_t(LOG_LEVEL::WARN)]();
-			// awake worker
+			auto& buffer = Config::get().buffer;
+			while(!buffer.push(msg))
+			{
+				// awakeWorker for push
+				awakeWorker();
+			}
+			// awake worker for push
 			awakeWorker();
 		}
-		inline void Debug(const Msg & msg)
+		// build real msg
+		inline Msg Debug(const Msg & msg)
 		{
-
+			return std::format("");
 		}
-		inline void Info(const Msg & msg)
+		inline Msg Info(const Msg & msg)
 		{
-
+			return std::format("");
 		}
-		inline void Warnning(const Msg & msg)
+		inline Msg Warnning(const Msg & msg)
 		{
-
+			return std::format("");
 		}
-		inline void empty(const Msg & msg){};
+		inline Msg empty(const Msg & msg){return ""};
 	}
 	inline void init()
 	{
 		// load config file
 		// init json & config
 		json.read(config_path);
-		Config::get();
+		initHandles(Config::get().level);
 		Writer::initFileName();
 		// creat worker thread
 		initWorker();
