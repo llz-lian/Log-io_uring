@@ -1,0 +1,8 @@
+{
+  "log_path": "./",
+  "log_name": "test_log",
+  "log_fileMaxsize": "100",
+  "log_output": "CONSOLE FILE",
+  "log_buffersize": "1024",
+  "log_level": "DEBUG"
+}
