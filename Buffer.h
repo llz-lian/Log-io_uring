@@ -1,17 +1,19 @@
+#pragma once
 #include <atomic>
 #include <vector>
 #include <stdexcept>
-// one read one write lock free buffer
-// note that push & move not keep data!
-// 
-
-//#define DEBUG
+#include <iostream>
+#define DEBUG
 template<class T>
 class Buffer
 {
 	// ring buffer
 	// lock free
-	std::vector<T> __datas;
+	struct alignas(64) Value
+	{
+		T t;
+	};
+	std::vector<Value> __datas;
 	std::atomic<size_t> __head; // next insert pos
 	std::atomic<size_t> __tail; // next read pos
 public:
@@ -30,14 +32,13 @@ public:
 		auto n = __datas.size();
 		auto tail = __tail.load(std::memory_order_relaxed);
 		auto head = __head.load(std::memory_order_acquire);
-		auto size = (head - tail) % (n + 1);
+		auto size = (head - tail) % (n+1);
 		if (size == n)
 		{
 			// full
 			return false;
 		}
-		// moved
-		__datas[head % n] = std::move(val);
+		__datas[head % n].t = std::move(val);
 		// update head
 		__head.store(head + 1, std::memory_order_release);
 		return true;
@@ -47,12 +48,12 @@ public:
 		auto n = __datas.size();
 		auto head = __head.load(std::memory_order_relaxed);
 		auto tail = __tail.load(std::memory_order_acquire);
-		auto size = (head - tail) % (n + 1);
+		auto size = (head - tail) % (n+1);
 		if (size == 0)
 		{
 			throw std::runtime_error("pop an empty queue");
 		}
-		auto ret = std::move(__datas[tail % n]);// need be here
+		auto ret = std::move(__datas[tail % n].t);// need be here
 		__tail.store(tail + 1, std::memory_order_release);
 		// need move here
 		// means
