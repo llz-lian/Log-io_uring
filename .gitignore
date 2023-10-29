@@ -1,5 +1,5 @@
 /.vs/
-/json/
+# /json/
 /out/
 /build/
 /.vscode/
