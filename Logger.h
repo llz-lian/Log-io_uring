@@ -156,7 +156,7 @@ namespace Logger
 		}
 		void write(const Msg & msg)
 		{
-			if(buffered_size>= self_buffer)
+			if(buffered_size>= max_buffered_size)
 			{
 				if(fsync_cnt>=fsync_times)
 				{
@@ -281,7 +281,7 @@ namespace Logger
 	};
 	namespace
 	{
-		using handle = std::function<void(const Mst & msg)>;
+		using handle = std::function<void(const Msg & msg)>;
 		// call DEBUG(msg) ==> log(handles[LOG_LEVEL::DEBUG](msg))
 		std::vector<handle> handles(5);// continous
 		void initHandles(LOG_LEVEL level)
@@ -297,6 +297,8 @@ namespace Logger
 				case LOG_LEVEL::DEBUG:
 					break;
 				case LOG_LEVEL::WARN:
+					break;
+				case LOG_LEVEL::INFO:
 					break;
 			}
 		}

@@ -1,3 +1,5 @@
 /.vs/
 /json/
 /out/
+/build/
+/.vscode/
