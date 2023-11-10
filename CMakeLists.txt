@@ -16,11 +16,14 @@ set(CMAKE_CXX_STANDARD 20)
 
 set(JSON_DIR "json")
 file(GLOB_RECURSE JSON_FILES ${JSON_DIR}/*.h ${JSON_DIR}/*.cpp)
+find_package(FMT REQUIRED)
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g  -std=c++20  -lfmt")
 
 # 将源代码添加到此项目的可执行文件。
 add_library(myjson STATIC ${JSON_FILES})
+set(CMAKE_CXX_STANDARD 20)
 
 add_executable (Logger "Logger.cpp" "Logger.h" "Time.h" "Buffer.h")
 
-target_link_libraries("Logger" myjson)
+target_link_libraries("Logger" myjson fmt)

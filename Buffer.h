@@ -3,7 +3,6 @@
 #include <vector>
 #include <stdexcept>
 #include <iostream>
-#define DEBUG
 template<class T>
 class Buffer
 {
